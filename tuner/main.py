@@ -2,13 +2,11 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar, List, Generator, Optional
 from pathlib import Path
 
-import subprocess
 import yaml
 import itertools
 import hashlib
 import copy
 
-DIR = Path(__file__).parent.parent
 
 T = TypeVar("T")
 
@@ -64,7 +62,6 @@ class Choice(Generic[T]):
 
 
 static = {
-    "note": "different loss",
     "iterations": 8_000,
     "test_end_date": "",
     "test_start_date": "2022-01-01",
@@ -98,9 +95,8 @@ values = {
 
 identifier = hashlib.md5(str(values).encode()).hexdigest()
 
-path = DIR / "data" / identifier
+path = Path.cwd() / "configs" / identifier
 path.mkdir(parents=True, exist_ok=True)
-print(path)
 keys, values = zip(*[(key, tuple(val)) for key, val in values.items()])
 
 
