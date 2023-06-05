@@ -2,6 +2,11 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar, List, Generator, Optional
 from pathlib import Path
 
+import subprocess
+import yaml
+import itertools
+import hashlib
+import copy
 
 DIR = Path(__file__).parent.parent
 
@@ -60,7 +65,7 @@ class Choice(Generic[T]):
 
 static = {
     "note": "different loss",
-    "iterations": 15_000,
+    "iterations": 8_000,
     "test_end_date": "",
     "test_start_date": "2022-01-01",
     "train_end_date": "",
@@ -69,6 +74,7 @@ static = {
     "warmup_steps": 0,
     "beta_2": 0.999,
     "clip_value": 1.0,
+    "dropout_rate": 0.5,
     "reg_rates.activity_reg": 1e-5,
     "reg_rates.kernel_reg": 1e-4,
     "reg_rates.bias_reg": 0.0,
@@ -77,22 +83,18 @@ static = {
     "loss_scales.critic_loss_scale": 0.0,
     "loss_scales.dist_loss_scale": 1.0,
     "loss_scales.negative_loss_scale": 0.0,
+    "loss_scales.weight_decay": 1e-2,
     "entropy_loss_scale": 0,
     "cash_return": 1.0,
 }
 values = {
     "batch_size": Choice[int]([16, 32, 64, 128, 256, 512]),
-    "initial_learning_rate": ExponentialDecay(1e-3, 1e-5, 5),
-    "learning_rate_decay": Choice[float]([0.99, 0.98, 0.975]),
-    "dropout": Linear(0.0, 0.6, 0.1),
-    "loss_scales.weight_decay": ExponentialDecay(1e-1, 1e-5, 3),
+    "initial_learning_rate": ExponentialDecay(1e-3, 1e-4, 3),
+    "learning_rate_decay": Choice[float]([0.99, 0.975]),
+    # "dropout": Linear(0.0, 0.6, 0.1),
+    # "loss_scales.weight_decay": ExponentialDecay(1e-1, 1e-5, 3),
 }
 
-
-import subprocess
-import yaml
-import itertools
-import hashlib
 
 identifier = hashlib.md5(str(values).encode()).hexdigest()
 
@@ -102,5 +104,25 @@ print(path)
 keys, values = zip(*[(key, tuple(val)) for key, val in values.items()])
 
 
-# for entry in itertools.product(*values):
-#     dict(zip(keys, entry))
+def update(data: dict, key: str, val):
+    parts = key.split(".", 1)
+    if len(parts) > 1:
+        key, rem = parts
+        val = update(data.get(key, {}), rem, val)
+    data.update({key: val})
+    return data
+
+
+configs = list(itertools.product(*values))
+print("Generated", len(configs))
+for i, entry in enumerate(itertools.product(*values)):
+    data = {}
+    static = copy.deepcopy(static)
+    for k, v in static.items():
+        update(data, k, v)
+    for key, val in zip(keys, entry):
+        update(data, key, val)
+
+    file_path = path / f"config_{i}.yaml"
+    config = yaml.dump(data, Dumper=yaml.Dumper)
+    print(f"Running with config:\n{config}")
